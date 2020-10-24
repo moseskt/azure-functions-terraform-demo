@@ -1,0 +1,41 @@
+pr: none
+trigger:
+  branches:
+    include:
+    - master
+
+variables:
+- group: terraform-secrets
+
+stages:
+- template: build-stages.yml
+  parameters:
+    environment: build
+    environmentDisplayName: Build
+    BuildConfiguration: release
+    TerraformArguments: >-
+      -var department=Engineering
+    # For additional security, pass secret through environment instead of command line.
+    # Terraform recognizes TF_VAR prefixed environment variables.  
+    TerraformEnvVariables:
+      TF_VAR_sql2password: $(SQL_PASSWORD)
+
+- template: terraform-stages.yml
+  parameters:
+    environment: stage
+    environmentDisplayName: Staging
+    TerraformArguments: >-
+      -var department=Engineering
+    # For additional security, pass secret through environment instead of command line.
+    # Terraform recognizes TF_VAR prefixed environment variables.  
+    TerraformEnvVariables:
+      TF_VAR_sql2password: $(SQL_PASSWORD)
+
+- template: terraform-stages.yml
+  parameters:
+    environment: live
+    environmentDisplayName: Live
+    TerraformArguments: >-
+      -var department=ProductionSupport
+    TerraformEnvVariables:
+      TF_VAR_sql2password: $(SQL_PASSWORD)

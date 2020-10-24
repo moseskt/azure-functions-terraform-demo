@@ -1,0 +1,57 @@
+parameters:
+  environment: build
+  environmentDisplayName: Build
+  BuildConfiguration: release
+  TerraformArguments: ''
+  TerraformEnvVariables:
+
+stages:
+- stage: Build_Stage
+  displayName: Build Stage
+  jobs:
+  - job: Build_App
+    displayName: Build App
+    # Avoid concurrent Terraform runs on PRs, which would result in failures due to exclusive lock on remote state file.
+    condition: and(succeeded(), or(eq(variables['Build.SourceBranch'], 'refs/heads/master'), variables['RUN_FLAG_TERRAFORM']))
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - task: UseDotNet@2
+      displayName: 'Use .NET Core sdk'
+      inputs:
+        packageType: sdk
+        version: 3.1.x
+        installationPath: $(Agent.ToolsDirectory)/dotnet
+    - task: DotNetCoreCLI@2
+      inputs:
+        command: build
+        projects: '**/*.csproj'
+        arguments: '--configuration ${{ parameters.BuildConfiguration }}' # Update this to match your need
+      displayName: 'dotnet build ${{ parameters.BuildConfiguration }}'
+
+    - task: DotNetCoreCLI@2
+      inputs:
+        command: test
+        projects: '**/*Tests/*.csproj'
+        arguments: '--configuration ${{ parameters.BuildConfiguration }}'
+      displayName: 'dotnet test ${{ parameters.BuildConfiguration }}'
+
+    - task: DotNetCoreCLI@2
+      inputs:
+        command: publish
+        publishWebProjects: True
+        arguments: '--configuration ${{ parameters.BuildConfiguration }} --output $(Build.ArtifactStagingDirectory)'
+        zipAfterPublish: True
+        modifyOutputPath: true
+
+    # this code takes all the files in $(Build.ArtifactStagingDirectory) and uploads them as an artifact of your build.
+    - task: PublishBuildArtifacts@1
+      inputs:
+        pathtoPublish: '$(Build.ArtifactStagingDirectory)' 
+        artifactName: 'functionapp'
+
+    # - task: PublishPipelineArtifact@1
+    #   displayName: Publish plan artifact
+    #   inputs:
+    #     targetPath: '$(Pipeline.Workspace)'
+    #     artifact: terraform_resources_${{ parameters.environment }}
